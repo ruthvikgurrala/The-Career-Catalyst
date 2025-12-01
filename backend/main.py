@@ -1,201 +1,176 @@
 import os
 import re
-import uvicorn
+import uuid
+import logging
 import io
-from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from google.genai import Client
-from google.genai.types import (
-    GenerateContentConfig,
-    Tool,
-    FunctionDeclaration,
-    Schema,
-    Type
-)
+from pydantic import BaseModel
 from pypdf import PdfReader
 
-# Load environment variables
-load_dotenv()
+# ADK Imports
+from google.adk.agents import LlmAgent
+from google.adk.models.google_llm import Gemini
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
-# Initialize FastAPI
+# --- 1. CONFIGURATION ---
+load_dotenv()
+if "GOOGLE_API_KEY" not in os.environ:
+    api_key = os.getenv("gemapi")
+    if api_key:
+        os.environ["GOOGLE_API_KEY"] = api_key
+    else:
+        print("❌ Warning: GOOGLE_API_KEY or 'gemapi' not found.")
+
+# Setup Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# --- 2. SETUP APP ---
 app = FastAPI(title="Career Catalyst API")
 
-# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for dev
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize Gemini Client
-client = Client(api_key=os.getenv("GOOGLE_API_KEY"))
+# --- 3. AGENT DEFINITION ---
+retry_config = types.HttpRetryOptions(attempts=3)
 
-# --- Tools ---
-
-def save_tailored_resume(content: str):
-    """Saves the tailored resume content."""
-    return {"status": "success", "file": "tailored_resume.md", "content": content}
-
-def save_cover_letter(content: str):
-    """Saves the cover letter content."""
-    return {"status": "success", "file": "cover_letter.md", "content": content}
-
-# Tool Definitions for Gemini
-save_tailored_resume_tool = Tool(
-    function_declarations=[
-        FunctionDeclaration(
-            name="save_tailored_resume",
-            description="Saves the tailored resume content to a file.",
-            parameters=Schema(
-                type=Type.OBJECT,
-                properties={
-                    "content": Schema(type=Type.STRING, description="The full markdown content of the tailored resume.")
-                },
-                required=["content"]
-            )
-        )
-    ]
-)
-
-save_cover_letter_tool = Tool(
-    function_declarations=[
-        FunctionDeclaration(
-            name="save_cover_letter",
-            description="Saves the cover letter content to a file.",
-            parameters=Schema(
-                type=Type.OBJECT,
-                properties={
-                    "content": Schema(type=Type.STRING, description="The full markdown content of the cover letter.")
-                },
-                required=["content"]
-            )
-        )
-    ]
-)
-
-tools = [save_tailored_resume_tool, save_cover_letter_tool]
-
-# --- Safety Net Logic ---
-
-def manual_save_fallback(full_text_response: str):
-    """
-    Fallback mechanism to extract resume and cover letter if tools weren't called.
-    Looks for markdown blocks or specific headers.
-    """
-    resume_content = ""
-    cover_letter_content = ""
-
-    # Try to find Resume block
-    resume_match = re.search(r"##\s*Tailored Resume\s*\n(.*?)(?=\n##|$)", full_text_response, re.DOTALL | re.IGNORECASE)
-    if resume_match:
-        resume_content = resume_match.group(1).strip()
-    else:
-        # Fallback: look for generic code block if it's the only thing
-        code_blocks = re.findall(r"```(?:markdown)?\n(.*?)```", full_text_response, re.DOTALL)
-        if len(code_blocks) >= 1:
-            resume_content = code_blocks[0].strip()
-        if len(code_blocks) >= 2:
-            cover_letter_content = code_blocks[1].strip()
-
-    # Try to find Cover Letter block if not found in code blocks
-    if not cover_letter_content:
-        cover_match = re.search(r"##\s*Cover Letter\s*\n(.*?)(?=$)", full_text_response, re.DOTALL | re.IGNORECASE)
-        if cover_match:
-            cover_letter_content = cover_match.group(1).strip()
+career_agent = LlmAgent(
+    name="CareerCoach",
+    model=Gemini(model="gemini-2.0-flash-lite-preview-02-05", retry_options=retry_config),
+    description="A career coaching agent.",
+    instruction="""
+    You are an expert Career Coach and Resume Writer.
     
-    # If still nothing, just return the whole text as resume (worst case)
-    if not resume_content and not cover_letter_content:
-        resume_content = full_text_response
+    INPUT:
+    1. A Resume (text)
+    2. A Job Description (text)
+    
+    TASK:
+    1. Analyze the Job Description for keywords.
+    2. Rewrite the Resume to highlight matching skills.
+    3. Write a persuasive Cover Letter.
+    
+    OUTPUT:
+    You MUST return the result in this EXACT markdown format:
+    
+    # RESUME
+    (The content of the tailored resume)
+    
+    # COVER LETTER
+    (The content of the cover letter)
+    """
+)
 
-    return {
-        "resume_content": resume_content,
-        "cover_letter_content": cover_letter_content
-    }
+# --- 4. HELPERS ---
 
-# --- Agent Logic ---
+async def parse_resume_file(file: UploadFile) -> str:
+    """Reads PDF or Text files and returns string content."""
+    filename = file.filename.lower()
+    content_bytes = await file.read()
+    
+    if filename.endswith(".pdf"):
+        try:
+            pdf_file = io.BytesIO(content_bytes)
+            reader = PdfReader(pdf_file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+            return text
+        except Exception as e:
+            logger.error(f"PDF Error: {e}")
+            return "Error reading PDF. Please ensure it is text-based."
+    else:
+        # Assume text/markdown
+        return content_bytes.decode("utf-8")
+
+# --- 5. ROUTES ---
+
+@app.get("/")
+def health_check():
+    """Fixes the 404 error on Render dashboard"""
+    return {"status": "Career Catalyst API is Online 🚀"}
 
 @app.post("/optimize")
 async def optimize_career(
-    resume_file: UploadFile,
+    resume_file: UploadFile = File(...),
     job_description: str = Form(...)
 ):
     try:
-        # Read resume content
-        content_type = resume_file.content_type
-        filename = resume_file.filename.lower()
+        # 1. Parse File (PDF/Text)
+        resume_text = await parse_resume_file(resume_file)
         
-        if filename.endswith(".pdf") or content_type == "application/pdf":
-            # Handle PDF
-            pdf_bytes = await resume_file.read()
-            pdf_file = io.BytesIO(pdf_bytes)
-            reader = PdfReader(pdf_file)
-            resume_content = ""
-            for page in reader.pages:
-                resume_content += page.extract_text() + "\n"
-        else:
-            # Handle Text/MD
-            resume_content = (await resume_file.read()).decode("utf-8")
-        
-        prompt = f"""
-        You are an expert Career Coach. 
-        
-        User's Resume:
-        {resume_content}
-        
-        Target Job Description:
-        {job_description}
-        
-        Task:
-        1. Read the user's resume and the target job description.
-        2. Rewrite the resume to highlight matching skills using keywords from the JD.
-        3. Write a compelling cover letter.
-        
-        You MUST output the content by calling the `save_tailored_resume` and `save_cover_letter` tools.
-        If you cannot call the tools, output the content in Markdown format with clear headers "## Tailored Resume" and "## Cover Letter".
-        """
-
-        # Call Gemini
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-lite-preview-02-05",
-            contents=prompt,
-            config=GenerateContentConfig(
-                tools=tools,
-                temperature=0.7
-            )
+        # 2. Setup Runner
+        session_service = InMemorySessionService()
+        runner = Runner(
+            agent=career_agent,
+            app_name="career_app",
+            session_service=session_service
         )
-
-        # Process Response
-        final_output = {"resume_content": "", "cover_letter_content": ""}
         
-        # Check for tool calls
-        tool_calls_found = False
-        if response.function_calls:
-             for call in response.function_calls:
-                if call.name == "save_tailored_resume":
-                    final_output["resume_content"] = call.args["content"]
-                    tool_calls_found = True
-                elif call.name == "save_cover_letter":
-                    final_output["cover_letter_content"] = call.args["content"]
-                    tool_calls_found = True
+        # 3. CRITICAL FIX: Explicitly Create Session
+        # This prevents the "Session Not Found" / 500 Error
+        session_id = str(uuid.uuid4())
+        await session_service.create_session(
+            app_name="career_app", 
+            user_id="web_user", 
+            session_id=session_id
+        )
+        
+        # 4. Construct Prompt
+        prompt = (
+            f"JOB DESCRIPTION:\n{job_description}\n\n"
+            f"RESUME CONTENT:\n{resume_text}\n\n"
+            "Action: Tailor the resume and write a cover letter based on the JD."
+        )
+        
+        logger.info(f"🤖 Processing resume: {resume_file.filename}")
+        full_response = ""
 
-        # Fallback if no tool calls or partial
-        if not tool_calls_found or not final_output["resume_content"] or not final_output["cover_letter_content"]:
-            # Get text content
-            full_text = response.text
-            if full_text:
-                fallback_data = manual_save_fallback(full_text)
-                if not final_output["resume_content"]:
-                    final_output["resume_content"] = fallback_data["resume_content"]
-                if not final_output["cover_letter_content"]:
-                    final_output["cover_letter_content"] = fallback_data["cover_letter_content"]
+        # 5. Run Agent
+        async for event in runner.run_async(
+            new_message=types.Content(parts=[types.Part(text=prompt)]),
+            session_id=session_id,
+            user_id="web_user"
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        full_response += part.text
 
-        return final_output
+        # 6. Parse Response (The Safety Net)
+        resume_content = "Could not generate resume."
+        cover_letter_content = "Could not generate cover letter."
+        
+        # Split by the headers we requested in the system prompt
+        if "# RESUME" in full_response and "# COVER LETTER" in full_response:
+            parts = full_response.split("# COVER LETTER")
+            resume_part = parts[0].replace("# RESUME", "").strip()
+            cover_part = parts[1].strip()
+            
+            resume_content = resume_part
+            cover_letter_content = cover_part
+        else:
+            # Fallback: Return raw text in resume if formatting failed
+            resume_content = full_response
+
+        return {
+            "resume_content": resume_content,
+            "cover_letter_content": cover_letter_content
+        }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Error in /optimize: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Error: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
