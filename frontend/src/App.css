@@ -1,0 +1,468 @@
+/* --- RESET & VARS --- */
+:root {
+  --bg-color: #09090b;
+  --card-bg: #18181b;
+  --card-border: #27272a;
+  --primary: #dc2626;
+  /* Cherry Red */
+  --primary-hover: #b91c1c;
+  --text-main: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --success: #10b981;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-color);
+  background-image: radial-gradient(circle at center, #450a0a 0%, transparent 70%);
+  /* Dark Red Glow Centered */
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  /* Prevent scroll during transition */
+}
+
+/* --- LAYOUT ANIMATION --- */
+.app-container {
+  width: 100%;
+  padding: 1rem;
+  /* Reduced padding */
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 100vh;
+  /* Force full height */
+  align-items: center;
+  /* Vertically center */
+}
+
+.main-layout {
+  display: grid;
+  gap: 2rem;
+  width: 100%;
+  transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Bouncy effect */
+}
+
+/* State 1: Centered (Start) */
+.centered-view {
+  grid-template-columns: 1fr;
+  width: 55vw;
+  /* Reduced from 90vw */
+  max-width: 600px;
+  /* Reduced from 1200px */
+}
+
+/* State 2: Split (Result) */
+.split-view {
+  grid-template-columns: 450px 1fr;
+  /* Sidebar wider */
+  max-width: 98vw;
+  /* Full width */
+}
+
+@media (max-width: 900px) {
+  .split-view {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- CARDS --- */
+.glass-card {
+  background: rgba(24, 24, 27, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 2rem;
+  /* Reduced padding */
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  max-height: 95vh;
+  /* Cap height to viewport */
+}
+
+/* --- INPUT PANEL STYLING --- */
+.input-panel {
+  height: auto;
+  /* Let content define height */
+  position: sticky;
+  top: 1rem;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  /* Reduced margin */
+}
+
+.icon-badge {
+  font-size: 2.5rem;
+  /* Smaller icon */
+  margin-bottom: 0.25rem;
+  display: inline-block;
+  filter: drop-shadow(0 0 15px rgba(220, 38, 38, 0.5));
+  /* Red shadow */
+}
+
+.app-header h1 {
+  font-size: 1.8rem;
+  /* Smaller title */
+  font-weight: 800;
+  margin: 0;
+  background: linear-gradient(to right, #fca5a5, #dc2626);
+  /* Red gradient */
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+/* Drop Zone */
+.drop-zone {
+  position: relative;
+  margin-bottom: 1rem;
+  /* Reduced margin */
+}
+
+.drop-zone input {
+  display: none;
+}
+
+.drop-zone label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  /* Reduced padding */
+  border: 2px dashed var(--card-border);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.drop-zone label:hover {
+  border-color: var(--primary);
+  background: rgba(220, 38, 38, 0.05);
+  /* Red tint */
+}
+
+.upload-placeholder .icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+.upload-placeholder span {
+  font-weight: 500;
+  display: block;
+}
+
+.upload-placeholder .sub-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.file-icon {
+  font-size: 1.8rem;
+}
+
+.file-name {
+  font-weight: 600;
+  color: var(--success);
+  word-break: break-all;
+}
+
+.file-change-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Input Group */
+.input-group {
+  margin-bottom: 1rem;
+  /* Reduced margin */
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+  color: #d4d4d8;
+}
+
+textarea {
+  width: 100%;
+  height: 100px;
+  /* Reduced height */
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 0.75rem;
+  color: var(--text-main);
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Main Button */
+.cta-button {
+  width: 100%;
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 0.75rem;
+  /* Reduced padding */
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 14px 0 rgba(220, 38, 38, 0.39);
+  /* Red shadow */
+}
+
+.cta-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.23);
+}
+
+.cta-button:disabled {
+  background: #3f3f46;
+  color: #71717a;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- OUTPUT PANEL --- */
+.output-panel {
+  opacity: 0;
+  transform: translateX(50px);
+  animation: slideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
+  height: 85vh;
+  /* Tall window */
+  padding: 0;
+  /* Remove padding for editor feel */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes slideIn {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.panel-header {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--card-border);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.header-left h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.header-left .badge {
+  font-size: 0.7rem;
+  background: #2e1065;
+  color: #a78bfa;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+.tab-btn.active {
+  background: rgba(220, 38, 38, 0.1);
+  /* Red tint */
+  color: var(--primary);
+}
+
+/* Code Editor Look */
+.editor-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #151518;
+  /* Darker code bg */
+  overflow: hidden;
+  /* Ensure children don't overflow */
+  border-radius: 12px;
+  /* Rounded corners for editor */
+}
+
+.window-bar {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: #1e1e20;
+  border-bottom: 1px solid #27272a;
+}
+
+.traffic-lights {
+  display: flex;
+  gap: 6px;
+  margin-right: 1rem;
+}
+
+.light {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.red {
+  background: #ff5f56;
+}
+
+.yellow {
+  background: #ffbd2e;
+}
+
+.green {
+  background: #27c93f;
+}
+
+.filename-display {
+  font-family: 'Monaco', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.code-scroll-area {
+  flex: 1;
+  overflow: auto;
+  /* Custom Scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+  padding-bottom: 3rem;
+  /* Extra padding for last line visibility */
+}
+
+.code-scroll-area::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.code-scroll-area::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+
+pre {
+  margin: 0;
+  padding: 1.5rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #e4e4e7;
+  white-space: pre-wrap;
+}
+
+.primary-btn-small {
+  background: var(--success);
+  color: #000;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+.primary-btn-small:hover {
+  filter: brightness(1.1);
+}
+
+.error-message {
+  color: #ef4444;
+  margin-top: 1rem;
+  text-align: center;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
