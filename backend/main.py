@@ -45,7 +45,7 @@ retry_config = types.HttpRetryOptions(attempts=3)
 
 career_agent = LlmAgent(
     name="CareerCoach",
-    model=Gemini(model="gemini-2.0-flash-lite-preview-02-05", retry_options=retry_config),
+    model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     description="A career coaching agent.",
     instruction="""
     You are an expert Career Coach and Resume Writer.
